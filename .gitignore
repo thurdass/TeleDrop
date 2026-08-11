@@ -1,6 +1,8 @@
 config.properties
 .telegram-upload/
 data/
+.idea/
+*.iml
 out/
 target/
 *.class
