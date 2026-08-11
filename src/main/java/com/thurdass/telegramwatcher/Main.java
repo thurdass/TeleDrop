@@ -1,7 +1,6 @@
-package com.thurdass.telegramwatcher;
+package main.java.com.thurdass.telegramwatcher;
 
 import com.thurdass.telegramwatcher.config.AppConfig;
-import com.thurdass.telegramwatcher.model.DownloadTask;
 import com.thurdass.telegramwatcher.queue.UploadQueue;
 import com.thurdass.telegramwatcher.queue.UploadWorker;
 import com.thurdass.telegramwatcher.state.UploadState;
