@@ -138,10 +138,12 @@ public final class FolderCompletionChecker {
         private void addMetadata(Path path, BasicFileAttributes attributes, String type) {
             latestModification = Math.max(latestModification, attributes.lastModifiedTime().toMillis());
             String relative = root.relativize(path).toString().replace(path.getFileSystem().getSeparator(), "/");
-            fingerprint = mix(fingerprint, type);
-            fingerprint = mix(fingerprint, relative);
-            fingerprint = mix(fingerprint, Long.toString(attributes.size()));
-            fingerprint = mix(fingerprint, Long.toString(attributes.lastModifiedTime().toMillis()));
+            long itemFingerprint = FNV_OFFSET_BASIS;
+            itemFingerprint = mix(itemFingerprint, type);
+            itemFingerprint = mix(itemFingerprint, relative);
+            itemFingerprint = mix(itemFingerprint, Long.toString(attributes.size()));
+            itemFingerprint = mix(itemFingerprint, Long.toString(attributes.lastModifiedTime().toMillis()));
+            fingerprint ^= itemFingerprint;
         }
 
         private static long mix(long value, String text) {

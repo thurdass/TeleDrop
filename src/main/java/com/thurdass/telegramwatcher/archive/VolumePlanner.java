@@ -1,17 +1,18 @@
 package com.thurdass.telegramwatcher.archive;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public final class VolumePlanner {
     private static final long LOCAL_HEADER_BYTES = 30L;
@@ -38,45 +39,7 @@ public final class VolumePlanner {
 
         PlanningContext context = new PlanningContext(root);
         try {
-            Files.walkFileTree(root, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) throws IOException {
-                    if (shouldIgnore(directory)) {
-                        return FileVisitResult.SKIP_SUBTREE;
-                    }
-                    context.directoryCount++;
-                    if (!directory.equals(root)) {
-                        String name = archivePath(root, directory) + "/";
-                        context.addWholeEntry(new ArchiveEntryPlan(
-                                name,
-                                archivePath(root, directory),
-                                directory,
-                                0,
-                                0,
-                                true,
-                                false,
-                                0));
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                    if (!attributes.isRegularFile()) {
-                        System.err.println("[VOLUME] Ignorando link ou entrada não regular: " + file);
-                        return FileVisitResult.CONTINUE;
-                    }
-                    context.fileCount++;
-                    context.totalSourceBytes = Math.addExact(context.totalSourceBytes, attributes.size());
-                    context.addFile(file, attributes.size());
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exception) throws IOException {
-                    throw exception;
-                }
-            });
+            context.visitDirectory(root);
         } catch (ArithmeticException exception) {
             throw new IOException("Tamanho total da pasta excede o limite de long", exception);
         }
@@ -123,6 +86,45 @@ public final class VolumePlanner {
 
         private PlanningContext(Path root) {
             this.root = root;
+        }
+
+        private void visitDirectory(Path directory) throws IOException {
+            if (shouldIgnore(directory)) {
+                return;
+            }
+            BasicFileAttributes attributes = Files.readAttributes(directory, BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS);
+            if (!attributes.isDirectory()) {
+                throw new IOException("Entrada não é um diretório: " + directory);
+            }
+            directoryCount++;
+            if (!directory.equals(root)) {
+                String relative = archivePath(root, directory);
+                addWholeEntry(new ArchiveEntryPlan(
+                        relative + "/", relative, directory, 0, 0, true, false, 0));
+            }
+
+            try (Stream<Path> children = Files.list(directory)) {
+                children.sorted().forEach(child -> {
+                    try {
+                        BasicFileAttributes childAttributes = Files.readAttributes(child,
+                                BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                        if (childAttributes.isDirectory()) {
+                            visitDirectory(child);
+                        } else if (childAttributes.isRegularFile()) {
+                            fileCount++;
+                            totalSourceBytes = Math.addExact(totalSourceBytes, childAttributes.size());
+                            addFile(child, childAttributes.size());
+                        } else {
+                            System.err.println("[VOLUME] Ignorando link ou entrada não regular: " + child);
+                        }
+                    } catch (IOException exception) {
+                        throw new UncheckedIOException(exception);
+                    }
+                });
+            } catch (UncheckedIOException exception) {
+                throw exception.getCause();
+            }
         }
 
         private void addFile(Path source, long size) throws IOException {
