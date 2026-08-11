@@ -1,4 +1,4 @@
-package main.java.com.thurdass.telegramwatcher;
+package com.thurdass.telegramwatcher;
 
 import com.thurdass.telegramwatcher.config.AppConfig;
 import com.thurdass.telegramwatcher.queue.UploadQueue;
