@@ -76,6 +76,7 @@ public final class UploadWorker implements Runnable {
 
         UploadState state = stateStore.loadOrCreate(sourceFolder);
         if (state.status() == UploadState.Status.COMPLETED) {
+            cleanupTemporaryArtifacts(sourceFolder, state);
             System.out.println("[SKIP] Já concluído: " + sourceFolder.getFileName());
             return;
         }
@@ -115,6 +116,10 @@ public final class UploadWorker implements Runnable {
 
         for (VolumePlan volume : plan.volumes()) {
             if (volume.number() < state.nextPart()) {
+                VolumeInfo previous = state.volumes().get(volume.number());
+                if (previous != null && previous.uploaded()) {
+                    tryDeleteGeneratedFile(temporaryFolder.resolve(previous.name()));
+                }
                 continue;
             }
             ensureSourceUnchanged(sourceFolder, state);
@@ -168,14 +173,14 @@ public final class UploadWorker implements Runnable {
             state.setStatus(UploadState.Status.COMPLETED);
             state.setError("");
             stateStore.save(state);
-            deleteGeneratedFile(manifest);
+            tryDeleteGeneratedFile(manifest);
         }
 
         state.setStatus(UploadState.Status.COMPLETED);
         state.setError("");
         stateStore.save(state);
         System.out.println("[SUCCESS] Todas as partes de " + sourceFolder.getFileName() + " foram enviadas.");
-        Files.deleteIfExists(temporaryFolder);
+        cleanupTemporaryArtifacts(sourceFolder, state);
     }
 
     private VolumeInfo prepareVolume(VolumePlan volume, Path temporaryFolder, UploadState state,
@@ -273,7 +278,27 @@ public final class UploadWorker implements Runnable {
         if (result.startsWith(sourceFolder.toAbsolutePath().normalize())) {
             throw new IOException("temp.folder não pode ficar dentro da pasta original");
         }
+        if (Files.exists(config.tempFolder())) {
+            Path sourceReal = sourceFolder.toRealPath();
+            Path tempReal = config.tempFolder().toRealPath();
+            if (tempReal.startsWith(sourceReal)) {
+                throw new IOException("temp.folder aponta para dentro da pasta original");
+            }
+        }
         return result;
+    }
+
+    private void cleanupTemporaryArtifacts(Path sourceFolder, UploadState state) throws IOException {
+        Path temporaryFolder = temporaryFolder(sourceFolder);
+        for (VolumeInfo volume : state.volumes().values()) {
+            tryDeleteGeneratedFile(temporaryFolder.resolve(volume.name()));
+        }
+        tryDeleteGeneratedFile(temporaryFolder.resolve("manifest.json"));
+        try {
+            Files.deleteIfExists(temporaryFolder);
+        } catch (java.nio.file.DirectoryNotEmptyException exception) {
+            System.err.println("[CLEANUP] Restaram arquivos não reconhecidos em " + temporaryFolder);
+        }
     }
 
     private void logProgress(UploadState state, ArchivePlan plan) {
@@ -308,5 +333,13 @@ public final class UploadWorker implements Runnable {
 
     private static void deleteGeneratedFile(Path file) throws IOException {
         Files.deleteIfExists(file);
+    }
+
+    private static void tryDeleteGeneratedFile(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException exception) {
+            System.err.println("[CLEANUP] Não foi possível remover " + file + ": " + exception.getMessage());
+        }
     }
 }

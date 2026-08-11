@@ -153,7 +153,7 @@ public final class UploadState {
     public void recordVolumeUploaded(VolumeInfo volume) {
         VolumeInfo uploaded = new VolumeInfo(volume.number(), volume.name(), volume.sizeBytes(), volume.sha256(), true);
         volumes.put(volume.number(), uploaded);
-        uploadedParts = Math.max(uploadedParts, countUploadedParts());
+        uploadedParts = countUploadedParts();
         uploadedBytes = sumUploadedBytes();
         nextPart = Math.max(nextPart, volume.number() + 1);
         touch();

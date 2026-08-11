@@ -25,15 +25,16 @@ public final class VolumeBuilder {
     }
 
     public VolumeInfo build(VolumePlan plan, Path output) throws IOException {
-        Files.createDirectories(output.toAbsolutePath().normalize().getParent());
+        Path parent = output.toAbsolutePath().normalize().getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         MessageDigest digest = checksumEnabled ? ChecksumUtils.newSha256() : null;
-        CountingOutputStream counting = null;
         try (OutputStream fileOutput = Files.newOutputStream(output);
-             CountingOutputStream counted = new CountingOutputStream(fileOutput);
-             OutputStream digestOutput = digest == null ? counted : new java.security.DigestOutputStream(counted, digest);
+             OutputStream digestOutput = digest == null
+                     ? fileOutput : new java.security.DigestOutputStream(fileOutput, digest);
              BufferedOutputStream buffered = new BufferedOutputStream(digestOutput, bufferSize);
              ZipOutputStream zip = new ZipOutputStream(buffered)) {
-            counting = counted;
             for (ArchiveEntryPlan entry : plan.entries()) {
                 writeEntry(zip, entry);
             }
@@ -77,34 +78,4 @@ public final class VolumeBuilder {
         zip.closeEntry();
     }
 
-    private static final class CountingOutputStream extends OutputStream {
-        private final OutputStream delegate;
-        private long count;
-
-        private CountingOutputStream(OutputStream delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public void write(int value) throws IOException {
-            delegate.write(value);
-            count = Math.addExact(count, 1L);
-        }
-
-        @Override
-        public void write(byte[] bytes, int offset, int length) throws IOException {
-            delegate.write(bytes, offset, length);
-            count = Math.addExact(count, length);
-        }
-
-        @Override
-        public void flush() throws IOException {
-            delegate.flush();
-        }
-
-        @Override
-        public void close() throws IOException {
-            delegate.close();
-        }
-    }
 }
