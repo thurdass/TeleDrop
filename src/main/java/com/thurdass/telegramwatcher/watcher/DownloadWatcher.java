@@ -85,9 +85,10 @@ public final class DownloadWatcher implements AutoCloseable {
                 return;
             }
 
+            boolean overflow = false;
             for (WatchEvent<?> event : key.pollEvents()) {
                 if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
-                    System.err.println("[WATCHER] OVERFLOW; estados existentes serão reavaliados no próximo reinício");
+                    overflow = true;
                     continue;
                 }
                 if (event.kind() != StandardWatchEventKinds.ENTRY_CREATE) {
@@ -105,9 +106,22 @@ public final class DownloadWatcher implements AutoCloseable {
                 }
             }
 
+            if (overflow) {
+                System.err.println("[WATCHER] OVERFLOW; reavaliando as pastas existentes");
+                rescanExistingFolders();
+            }
+
             if (!key.reset()) {
                 return;
             }
+        }
+    }
+
+    private void rescanExistingFolders() {
+        try {
+            scanExistingFolders();
+        } catch (IOException exception) {
+            System.err.println("[WATCHER] Falha ao reavaliar a raiz: " + exception.getMessage());
         }
     }
 
