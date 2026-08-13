@@ -5,10 +5,12 @@ import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 public final class AppConfig {
     private static final long MB = 1_000_000L;
@@ -76,6 +78,7 @@ public final class AppConfig {
         try (InputStream input = Files.newInputStream(absoluteConfig)) {
             properties.load(input);
         }
+        warnAboutCredentialPermissions(absoluteConfig, properties);
 
         Path baseDirectory = absoluteConfig.getParent();
         Path watchFolder = resolvePath(required(properties, "watch.folder"), baseDirectory);
@@ -160,6 +163,36 @@ public final class AppConfig {
             return environmentValue.trim();
         }
         return required(properties, key);
+    }
+
+    private static void warnAboutCredentialPermissions(Path configPath, Properties properties) {
+        if (!hasConfiguredCredential(properties)) {
+            return;
+        }
+        try {
+            Set<PosixFilePermission> permissions = Files.getPosixFilePermissions(configPath);
+            boolean accessibleToOthers = permissions.contains(PosixFilePermission.GROUP_READ)
+                    || permissions.contains(PosixFilePermission.GROUP_WRITE)
+                    || permissions.contains(PosixFilePermission.OTHERS_READ)
+                    || permissions.contains(PosixFilePermission.OTHERS_WRITE);
+            if (accessibleToOthers) {
+                System.err.println("[SECURITY] " + configPath
+                        + " contém credenciais e está acessível por grupo/outros; use chmod 600");
+            }
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // Non-POSIX filesystems do not expose these permissions.
+        }
+    }
+
+    private static boolean hasConfiguredCredential(Properties properties) {
+        return isRealCredential(properties.getProperty("telegram.bot.token"))
+                || isRealCredential(properties.getProperty("telegram.chat.id"));
+    }
+
+    private static boolean isRealCredential(String value) {
+        return value != null && !value.isBlank()
+                && !value.equals("COLOQUE_O_TOKEN_AQUI")
+                && !value.equals("COLOQUE_O_CHAT_ID_AQUI");
     }
 
     private static Path resolvePath(String value, Path baseDirectory) {
