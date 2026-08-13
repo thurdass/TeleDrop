@@ -19,6 +19,7 @@ import com.thurdass.telegramwatcher.watcher.FolderSnapshot;
 
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -202,11 +203,23 @@ public final class UploadWorker implements Runnable {
         }
 
         deleteGeneratedFile(partialFile);
+        ensureSufficientDiskSpace(temporaryFolder, volume);
         System.out.println("[VOLUME] Criando " + volume.name() + "...");
         VolumeInfo built = volumeBuilder.build(volume, partialFile);
         moveGeneratedFile(partialFile, finalFile);
         System.out.println("[VOLUME] " + volume.name() + " pronto - " + FileUtils.formatBytes(built.sizeBytes()));
         return built;
+    }
+
+    private void ensureSufficientDiskSpace(Path temporaryFolder, VolumePlan volume) throws IOException {
+        FileStore fileStore = Files.getFileStore(temporaryFolder);
+        long usableBytes = fileStore.getUsableSpace();
+        long requiredBytes = volume.estimatedBytes();
+        if (usableBytes < requiredBytes) {
+            throw new IOException("Espaço insuficiente em " + fileStore + " para criar " + volume.name()
+                    + ": disponível " + FileUtils.formatBytes(usableBytes)
+                    + ", necessário aproximadamente " + FileUtils.formatBytes(requiredBytes));
+        }
     }
 
     private TelegramUploadResult uploadWithRetry(Path file, String fileName) throws InterruptedException {
