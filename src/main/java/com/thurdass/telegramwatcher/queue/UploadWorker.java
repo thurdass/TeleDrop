@@ -241,14 +241,26 @@ public final class UploadWorker implements Runnable {
             if (last.success()) {
                 return last;
             }
-            System.err.println("[RETRY] " + fileName + " tentativa " + attempt + "/" + config.telegramRetryMax()
-                    + ": " + last.description());
-            if (attempt < config.telegramRetryMax()) {
-                Duration delay = retryDelay(attempt, last);
-                Thread.sleep(delay.toMillis());
+            boolean retryable = isRetryable(last);
+            System.err.println((retryable ? "[RETRY] " : "[FAILED] ") + fileName + " tentativa " + attempt + "/"
+                    + config.telegramRetryMax() + ": " + last.description());
+            if (!retryable || attempt >= config.telegramRetryMax()) {
+                break;
             }
+            Duration delay = retryDelay(attempt, last);
+            Thread.sleep(delay.toMillis());
         }
         return last;
+    }
+
+    private static boolean isRetryable(TelegramUploadResult result) {
+        int status = result.httpStatus();
+        return status == 0
+                || status == 408
+                || status == 425
+                || status == 429
+                || result.errorCode() == 429
+                || status >= 500;
     }
 
     private Duration retryDelay(int attempt, TelegramUploadResult result) {
