@@ -127,12 +127,18 @@ public final class UploadWorker implements Runnable {
             state.setStatus(UploadState.Status.BUILDING);
             stateStore.save(state);
             VolumeInfo info = prepareVolume(volume, temporaryFolder, state, volumeBuilder);
+            Path localFile = temporaryFolder.resolve(volume.name());
+            try {
+                ensureSourceUnchanged(sourceFolder, state);
+            } catch (IOException exception) {
+                tryDeleteGeneratedFile(localFile);
+                throw exception;
+            }
             state.recordVolumeBuilt(info);
             state.setNextPart(volume.number());
             state.setStatus(UploadState.Status.UPLOADING);
             stateStore.save(state);
 
-            Path localFile = temporaryFolder.resolve(volume.name());
             System.out.println("[UPLOAD] Enviando " + volume.name() + " (parte " + volume.number() + "/"
                     + plan.totalParts() + ")");
             TelegramUploadResult result = uploadWithRetry(localFile, volume.name());
