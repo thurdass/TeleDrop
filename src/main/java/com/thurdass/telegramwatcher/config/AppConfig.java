@@ -116,6 +116,7 @@ public final class AppConfig {
         Path tempFolder = resolvePath(properties.getProperty("temp.folder",
                 watchFolder.resolve(".telegram-upload").toString()), baseDirectory);
         Path dataFolder = resolvePath(properties.getProperty("data.folder", "./data"), baseDirectory);
+        validateStoragePaths(watchFolder, tempFolder, dataFolder);
         Path stateFolder = dataFolder.resolve("upload-state").normalize();
 
         boolean checksumEnabled = booleanValue(properties, "checksum.enabled", true);
@@ -174,6 +175,19 @@ public final class AppConfig {
             throw new IllegalArgumentException("telegram.api.base.url deve usar http ou https");
         }
         return uri;
+    }
+
+    private static void validateStoragePaths(Path watchFolder, Path tempFolder, Path dataFolder) {
+        if (watchFolder.startsWith(tempFolder)) {
+            throw new IllegalArgumentException("temp.folder não pode ser a pasta monitorada nem um diretório pai dela: "
+                    + tempFolder);
+        }
+        if (dataFolder.startsWith(watchFolder)) {
+            throw new IllegalArgumentException("data.folder não pode ficar dentro da pasta monitorada: " + dataFolder);
+        }
+        if (tempFolder.startsWith(dataFolder) || dataFolder.startsWith(tempFolder)) {
+            throw new IllegalArgumentException("temp.folder e data.folder não podem ficar um dentro do outro");
+        }
     }
 
     private static boolean isOfficialApi(URI uri) {
