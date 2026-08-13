@@ -73,15 +73,20 @@ TeleDrop never automatically:
 - Local Telegram Bot API Server support
 - Upload retry with backoff
 - Telegram `retry_after` handling
+- Retry only for transient Telegram failures
 - Persistent upload state
 - Resume after restart or interruption
 - SHA-256 integrity verification
 - Manifest generation
 - Predictable temporary disk usage
+- Temporary disk-space preflight checks
+- Single-instance process lock
+- Recovery after `WatchService` event overflow
 - Graceful shutdown
 - Safe temporary file handling
 - Original folder protection
 - Configurable upload limits
+- Automated tests for core processing flows
 - No heavy runtime frameworks
 
 ---
@@ -784,6 +789,10 @@ Attempt 3
 
 When Telegram returns `retry_after`, for example after HTTP `429`, TeleDrop respects the greater waiting period.
 
+Retries are used for transient failures such as network errors, timeouts, HTTP `429`, and HTTP `5xx` responses.
+Permanent client errors, such as invalid configuration or authorization (`4xx` other than `429`), are reported
+without spending all configured retry attempts.
+
 After the configured retry limit is reached, the task becomes:
 
 ```text
@@ -1014,6 +1023,15 @@ archive.buffer.kb=64
 shutdown.await.seconds=30
 ```
 
+As an alternative to storing credentials in `config.properties`, set environment variables:
+
+```bash
+export TELEDROP_BOT_TOKEN='YOUR_BOT_TOKEN'
+export TELEDROP_CHAT_ID='YOUR_CHAT_ID'
+```
+
+Environment variables take precedence over the corresponding properties.
+
 For a Local Telegram Bot API Server:
 
 ```properties
@@ -1090,6 +1108,7 @@ TeleDrop/
 │               └── thurdass/
 │                   └── telegramwatcher/
 │                       ├── Main.java
+│                       ├── ApplicationLock.java
 │                       │
 │                       ├── config/
 │                       │   └── AppConfig.java
@@ -1116,6 +1135,9 @@ TeleDrop/
 │                       │   ├── UploadState.java
 │                       │   └── UploadStateStore.java
 │                       │
+│                       ├── manifest/
+│                       │   └── ManifestWriter.java
+│                       │
 │                       ├── model/
 │                       │   ├── DownloadTask.java
 │                       │   └── VolumeInfo.java
@@ -1125,7 +1147,6 @@ TeleDrop/
 │                           └── ChecksumUtils.java
 │
 ├── config.example.properties
-├── config.properties
 ├── build.sh
 ├── run.sh
 ├── pom.xml
@@ -1164,6 +1185,12 @@ A custom configuration file can also be provided:
 ```
 
 The project can also be built using Maven.
+
+Run the automated tests with:
+
+```bash
+mvn test
+```
 
 ---
 
