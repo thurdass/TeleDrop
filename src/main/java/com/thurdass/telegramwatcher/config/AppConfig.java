@@ -86,11 +86,11 @@ public final class AppConfig {
         Duration stableDuration = positiveDuration(properties, "folder.stable.seconds", 60);
         Duration scanInterval = positiveDuration(properties, "folder.scan.interval.seconds", 10);
 
-        String token = required(properties, "telegram.bot.token");
+        String token = credential(properties, "telegram.bot.token", "TELEDROP_BOT_TOKEN");
         if (token.equals("COLOQUE_O_TOKEN_AQUI")) {
             throw new IllegalArgumentException("Configure telegram.bot.token antes de executar");
         }
-        String chatId = required(properties, "telegram.chat.id");
+        String chatId = credential(properties, "telegram.chat.id", "TELEDROP_CHAT_ID");
         if (chatId.equals("COLOQUE_O_CHAT_ID_AQUI")) {
             throw new IllegalArgumentException("Configure telegram.chat.id antes de executar");
         }
@@ -152,6 +152,14 @@ public final class AppConfig {
             throw new IllegalArgumentException("Propriedade obrigatória ausente: " + key);
         }
         return value.trim();
+    }
+
+    private static String credential(Properties properties, String key, String environmentVariable) {
+        String environmentValue = System.getenv(environmentVariable);
+        if (environmentValue != null && !environmentValue.isBlank()) {
+            return environmentValue.trim();
+        }
+        return required(properties, key);
     }
 
     private static Path resolvePath(String value, Path baseDirectory) {
