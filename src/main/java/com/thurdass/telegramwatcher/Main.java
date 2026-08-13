@@ -34,6 +34,13 @@ public final class Main {
     }
 
     private static void run(AppConfig config) throws IOException, InterruptedException {
+        Path lockPath = config.stateFolder().resolve("teledrop.lock");
+        try (ApplicationLock ignored = ApplicationLock.acquire(lockPath)) {
+            runLocked(config);
+        }
+    }
+
+    private static void runLocked(AppConfig config) throws IOException, InterruptedException {
         Files.createDirectories(config.tempFolder());
         UploadStateStore stateStore = new UploadStateStore(config.stateFolder());
         for (UploadState state : stateStore.loadAll()) {
